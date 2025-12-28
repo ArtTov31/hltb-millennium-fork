@@ -17,6 +17,10 @@ Developer documentation for HLTB for Millennium.
 
 - [Implementation Plan](implementation-plan.md) - Development phases and code structure
 
+## Release
+
+- [Release Process](release-process.md) - Publishing to the Millennium Plugin Database
+
 ## Reference
 
 - [References](references.md) - Source materials and related projects
