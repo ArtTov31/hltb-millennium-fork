@@ -7,6 +7,11 @@ interface CacheStore {
 
 const CACHE_KEY = 'hltb-millennium-cache';
 const CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours
+const MAX_CACHE_AGE = 90 * 24 * 60 * 60 * 1000; // 90 days
+const MAX_CACHE_ENTRIES = 2000;
+const PRUNE_INTERVAL = 50; // Prune every N writes
+
+let writeCount = 0;
 
 export function getCache(appId: number): { entry: CacheEntry; isStale: boolean } | null {
   try {
@@ -26,16 +31,42 @@ export function getCache(appId: number): { entry: CacheEntry; isStale: boolean }
   }
 }
 
+function pruneCache(cache: CacheStore): CacheStore {
+  const now = Date.now();
+  let entries = Object.entries(cache);
+
+  // Remove entries older than MAX_CACHE_AGE
+  entries = entries.filter(([_, entry]) => {
+    return now - entry.timestamp < MAX_CACHE_AGE;
+  });
+
+  // If still over limit, remove oldest entries
+  if (entries.length > MAX_CACHE_ENTRIES) {
+    entries.sort((a, b) => b[1].timestamp - a[1].timestamp); // Newest first
+    entries = entries.slice(0, MAX_CACHE_ENTRIES);
+    log(`Pruned cache to ${MAX_CACHE_ENTRIES} entries`);
+  }
+
+  return Object.fromEntries(entries);
+}
+
 export function setCache(appId: number, data: HltbGameResult | null): void {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
-    const cache: CacheStore = raw ? JSON.parse(raw) : {};
+    let cache: CacheStore = raw ? JSON.parse(raw) : {};
 
     cache[appId] = {
       data,
       timestamp: Date.now(),
       notFound: data === null,
     };
+
+    // Periodically prune old/excess entries
+    writeCount++;
+    if (writeCount >= PRUNE_INTERVAL) {
+      writeCount = 0;
+      cache = pruneCache(cache);
+    }
 
     localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
   } catch (e) {
