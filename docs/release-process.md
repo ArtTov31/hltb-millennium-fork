@@ -20,7 +20,7 @@ Before submitting:
 2. Add the plugin as a submodule:
    ```bash
    cd plugins
-   git submodule add https://github.com/jcdoll/hltb-for-millennium hltb-for-millennium
+   git submodule add https://github.com/jcdoll/hltb-millennium-plugin hltb-millennium-plugin
    cd ..
    git add .
    git commit -m "Add HLTB for Steam plugin"
@@ -46,7 +46,7 @@ When releasing a new version:
 
 4. Update the submodule in PluginDatabase:
    ```bash
-   cd PluginDatabase/plugins/hltb-for-millennium
+   cd PluginDatabase/plugins/hltb-millennium-plugin
    git pull origin main
    cd ../..
    git add .
