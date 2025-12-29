@@ -5,11 +5,25 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      lua: ${{ steps.filter.outputs.lua }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            lua:
+              - 'backend/**/*.lua'
+              - 'tests/**/*.lua'
+
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,3 +38,22 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  test:
+    needs: changes
+    if: ${{ needs.changes.outputs.lua == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Lua and LuaRocks
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.3 liblua5.3-dev luarocks
+
+      - name: Install busted
+        run: sudo luarocks install busted
+
+      - name: Run tests
+        run: busted tests/ --verbose
