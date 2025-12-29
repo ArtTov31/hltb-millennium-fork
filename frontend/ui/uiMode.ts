@@ -17,8 +17,7 @@ let modeChangeCallbacks: ModeChangeCallback[] = [];
 
 function getDesktopDocument(): Document | undefined {
   // @ts-ignore - SteamUIStore is a global
-  const windowStore = SteamUIStore?.WindowStore;
-  return windowStore?.SteamUIWindows?.[0]?.m_BrowserWindow?.document;
+  return SteamUIStore?.WindowStore?.MainWindowInstance?.BrowserWindow?.document;
 }
 
 function getGamepadDocument(): Document | undefined {
@@ -83,27 +82,8 @@ async function fetchDocumentForMode(mode: EUIMode): Promise<Document | undefined
 // Mode detection
 
 async function detectUIMode(): Promise<EUIMode> {
-  try {
-    // @ts-ignore - SteamClient is a global
-    const mode = await SteamClient?.UI?.GetUIMode?.();
-    if (mode !== undefined) {
-      return mode as EUIMode;
-    }
-  } catch (e) {
-    log('Failed to get UI mode from SteamClient:', e);
-  }
-
-  // Fallback: check which window instance exists
-  // @ts-ignore
-  const windowStore = SteamUIStore?.WindowStore;
-  if (windowStore?.GamepadUIMainWindowInstance) {
-    return EUIMode.GamePad;
-  }
-  if (windowStore?.SteamUIWindows?.length > 0) {
-    return EUIMode.Desktop;
-  }
-
-  return EUIMode.Unknown;
+  // @ts-ignore - SteamClient is a global
+  return (await SteamClient.UI.GetUIMode()) as EUIMode;
 }
 
 // Public API
