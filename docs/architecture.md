@@ -9,11 +9,11 @@ The following table compares the Decky Loader platform (Steam Deck) with the Mil
 | Aspect | Decky (Steam Deck) | Millennium (Desktop) |
 |--------|-------------------|---------------------|
 | Frontend | TypeScript/React | TypeScript/React |
-| Backend | Python | Python |
+| Backend | Python | Lua |
 | UI Hooks | `decky-frontend-lib` | `@steambrew/client` APIs |
 | Build Tool | Rollup | `@steambrew/ttc` |
 | DOM Access | `serverApi.routerHook` | MutationObserver + CSS selectors |
-| HTTP Requests | `serverApi.fetchNoCors()` | Python backend via `Millennium.callServerMethod()` |
+| HTTP Requests | `serverApi.fetchNoCors()` | Lua backend via `Millennium.callServerMethod()` |
 
 Both platforms use React for the frontend, which allows significant code reuse for UI components and business logic.
 
@@ -59,8 +59,8 @@ The following components from hltb-for-deck can be adapted with minimal changes:
 
 2. Backend Communication
    - Decky uses Python with `serverApi.fetchNoCors()`
-   - Millennium uses Python with `Millennium.callServerMethod()`
-   - Backend handles HLTB lookups via `howlongtobeatpy` library
+   - Millennium uses Lua with `Millennium.callServerMethod()`
+   - Backend handles HLTB lookups via custom Lua HTTP client
 
 3. Storage API
    - Decky uses `localforage` (IndexedDB wrapper)
@@ -98,7 +98,9 @@ hltb-millennium-plugin/
 │       ├── selectors.ts     # CSS selectors for Desktop/GamePad modes
 │       └── uiMode.ts        # UI mode detection and switching
 ├── backend/
-│   └── main.py              # Python backend (HLTB lookups)
+│   ├── main.lua             # Lua backend entry point
+│   ├── hltb.lua             # HLTB API client
+│   └── steam.lua            # Steam API helpers
 └── webkit/
     └── index.tsx            # Webkit entry point
 ```
@@ -139,11 +141,11 @@ Return data   Fetch from HLTB API
 
 ### Decision 1: Backend for HLTB Lookups
 
-Implementation: Python backend using `howlongtobeatpy` library.
+Implementation: Lua backend with custom HLTB API client.
 
 Rationale:
 - HLTB API requires complex search logic best handled server-side
-- `howlongtobeatpy` provides reliable game matching
+- Lua modules handle API requests, game matching, and name sanitization
 - Backend can sanitize game names for better search results
 - Avoids CORS issues entirely
 
@@ -181,9 +183,9 @@ Rationale:
 
 | Risk | Mitigation Strategy |
 |------|---------------------|
-| HLTB API changes | Python `howlongtobeatpy` library abstracts API details |
+| HLTB API changes | Lua client based on reference implementations, endpoint extraction from website |
 | Steam UI class changes | Fallback image selector, common container for both game types |
 | HLTB rate limiting | Aggressive caching (2+ hour TTL), stale-while-revalidate |
-| Game matching failures | Backend name sanitization, library handles fuzzy matching |
+| Game matching failures | Backend name sanitization, Levenshtein distance matching |
 | Big Picture issues | Document known issues, graceful degradation |
 | Mode switching | Re-initialize on window creation, clean observer cleanup |

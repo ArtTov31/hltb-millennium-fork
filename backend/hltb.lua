@@ -2,7 +2,10 @@
     HLTB API Client for Lua
 
     Standalone module for querying HowLongToBeat.com
-    Requires: http, json modules
+    Requires: http, json, logger modules
+
+    API implementation based on:
+    https://github.com/ScrappyCocco/HowLongToBeat-PythonAPI
 
     Usage:
         local hltb = require("hltb")
@@ -14,20 +17,296 @@
 
 local http = require("http")
 local json = require("json")
+local logger = require("logger")
+local utils = require("hltb_utils")
 
 local M = {}
 
 M.BASE_URL = "https://howlongtobeat.com/"
-M.TIMEOUT = 10
+M.REFERER_HEADER = M.BASE_URL
+M.TIMEOUT = 60
+M.TOKEN_TTL = 300
+-- Static fallback URL
+M.SEARCH_URL = M.BASE_URL .. "api/search"
 
--- Get fresh auth token from HLTB
-function M.get_auth_token()
-    local timestamp_ms = os.time() * 1000
-    local url = M.BASE_URL .. "api/search/init?t=" .. timestamp_ms
+-- Cache
+local cached_token = nil
+local cached_search_url = nil
+local cached_build_id = nil
+local token_expires_at = 0
+
+-- User agent for requests
+local USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+-- Extract search endpoint from website JavaScript
+-- Matches hltb-for-deck: only looks at _app- scripts
+local function extract_search_url()
+    logger:info("Extracting search endpoint from website...")
+
+    -- Get homepage
+    local headers = {
+        ["User-Agent"] = USER_AGENT,
+        ["referer"] = M.REFERER_HEADER
+    }
+
+    local response, err = http.get(M.BASE_URL, {
+        headers = headers,
+        timeout = M.TIMEOUT
+    })
+
+    if not response or response.status ~= 200 then
+        logger:info("Failed to fetch homepage")
+        return nil
+    end
+
+    logger:info("Homepage fetched, length: " .. #response.body)
+
+    -- Find script tags with '_app-' in src (matching hltb-for-deck)
+    local script_urls = {}
+    for src in response.body:gmatch('<script[^>]+src="([^"]+)"') do
+        if src:find('_app%-') then
+            table.insert(script_urls, src)
+            logger:info("Found _app script: " .. src)
+        end
+    end
+
+    logger:info("Found " .. #script_urls .. " _app script(s)")
+
+    -- Try each script
+    for i, script_src in ipairs(script_urls) do
+        local script_url = M.BASE_URL .. script_src
+        logger:info("Checking script " .. i .. ": " .. script_src:sub(1, 60))
+
+        local script_resp, script_err = http.get(script_url, {
+            headers = headers,
+            timeout = M.TIMEOUT
+        })
+
+        if script_resp and script_resp.status == 200 and script_resp.body then
+            logger:info("Script loaded, length: " .. #script_resp.body)
+
+            -- Match Python regex:
+            -- r'fetch\s*\(\s*["\']/api/([a-zA-Z0-9_/]+)[^"\']*["\']\s*,\s*{[^}]*method:\s*["\']POST["\'][^}]*}'
+            --
+            -- This looks for: fetch("/api/xxx",{...method:"POST"...})
+            -- Key: the method:"POST" must be in the same {...} block after the URL
+
+            -- Lua patterns can't do [^}]* properly with nested content, so use a simpler approach:
+            -- Find all /api/xxx patterns and verify they're in a fetch POST context
+
+            local content = script_resp.body
+
+            -- Look for patterns like: fetch("/api/search",{method:"POST"
+            -- or fetch('/api/search',{method:'POST'
+            for api_path in content:gmatch('fetch%s*%(%s*["\'](/api/[a-zA-Z0-9_]+)["\']') do
+                logger:info("Found fetch with API path: " .. api_path)
+
+                -- Find position to check context after the path
+                local pattern = 'fetch%s*%(%s*["\']' .. api_path:gsub('/', '%%/') .. '["\']%s*,%s*{[^}]-method%s*:%s*["\']POST["\']'
+                if content:find(pattern) then
+                    logger:info("Confirmed POST method for: " .. api_path)
+
+                    -- Extract base path
+                    local path_suffix = api_path:match('/api/([a-zA-Z0-9_]+)')
+                    if path_suffix and path_suffix ~= "find" then
+                        local full_endpoint = "api/" .. path_suffix
+                        logger:info("Found search endpoint: " .. full_endpoint)
+                        return full_endpoint
+                    else
+                        logger:info("Skipping path (find or invalid): " .. tostring(path_suffix))
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+-- Extract NextJS build ID from homepage (for game data requests)
+local function extract_build_id()
+    if cached_build_id then
+        return cached_build_id
+    end
+
+    logger:info("Extracting NextJS build ID...")
+
+    local headers = {
+        ["User-Agent"] = USER_AGENT,
+        ["referer"] = M.REFERER_HEADER
+    }
+
+    local response, err = http.get(M.BASE_URL, {
+        headers = headers,
+        timeout = M.TIMEOUT
+    })
+
+    if not response or response.status ~= 200 then
+        logger:info("Failed to fetch homepage for build ID")
+        return nil
+    end
+
+    -- Look for /_next/static/{buildId}/_ssgManifest.js or _buildManifest.js
+    local build_id = response.body:match('/_next/static/([^/]+)/_ssgManifest%.js')
+    if not build_id then
+        build_id = response.body:match('/_next/static/([^/]+)/_buildManifest%.js')
+    end
+
+    if build_id then
+        logger:info("Found NextJS build ID: " .. build_id)
+        cached_build_id = build_id
+        return build_id
+    end
+
+    logger:info("Could not find NextJS build ID")
+    return nil
+end
+
+-- Fetch game data by game ID (returns completion times)
+-- Matches reference: fetchGameData
+local function fetch_game_data(game_id)
+    local build_id = extract_build_id()
+    if not build_id then
+        return nil
+    end
+
+    local url = M.BASE_URL .. "_next/data/" .. build_id .. "/game/" .. game_id .. ".json"
+    logger:info("Fetching game data: " .. url)
+
+    local headers = {
+        ["User-Agent"] = USER_AGENT,
+        ["referer"] = M.REFERER_HEADER
+    }
 
     local response, err = http.get(url, {
+        headers = headers,
+        timeout = M.TIMEOUT
+    })
+
+    if not response then
+        logger:info("Game data request failed: " .. (err or "unknown"))
+        return nil
+    end
+
+    if response.status ~= 200 then
+        logger:info("Game data request returned HTTP " .. response.status)
+        return nil
+    end
+
+    local success, data = pcall(json.decode, response.body)
+    if not success or not data then
+        logger:info("Invalid JSON response for game data")
+        return nil
+    end
+
+    -- Validate structure: pageProps.game.data.game must be array
+    if type(data.pageProps) ~= "table" then
+        logger:info("Unexpected JSON data for game page: no pageProps")
+        return nil
+    end
+
+    if type(data.pageProps.game) ~= "table" then
+        logger:info("Unexpected JSON data for game page: no game")
+        return nil
+    end
+
+    if type(data.pageProps.game.data) ~= "table" then
+        logger:info("Unexpected JSON data for game page: no data")
+        return nil
+    end
+
+    local game_array = data.pageProps.game.data.game
+    if type(game_array) ~= "table" then
+        logger:info("Unexpected JSON data for game page: game is not array")
+        return nil
+    end
+
+    -- Reference: gameDataList.length !== 1
+    if #game_array ~= 1 then
+        logger:info("Unexpected JSON data for game page: game array length is " .. #game_array)
+        return nil
+    end
+
+    local game_data = game_array[1]
+
+    -- Validate all required fields are numbers (matching reference exactly)
+    if type(game_data.comp_main) ~= "number" then
+        logger:info("Unexpected JSON data: comp_main is not number")
+        return nil
+    end
+
+    if type(game_data.comp_plus) ~= "number" then
+        logger:info("Unexpected JSON data: comp_plus is not number")
+        return nil
+    end
+
+    if type(game_data.comp_100) ~= "number" then
+        logger:info("Unexpected JSON data: comp_100 is not number")
+        return nil
+    end
+
+    if type(game_data.comp_all) ~= "number" then
+        logger:info("Unexpected JSON data: comp_all is not number")
+        return nil
+    end
+
+    if type(game_data.game_id) ~= "number" then
+        logger:info("Unexpected JSON data: game_id is not number")
+        return nil
+    end
+
+    if type(game_data.profile_steam) ~= "number" then
+        logger:info("Unexpected JSON data: profile_steam is not number")
+        return nil
+    end
+
+    if type(game_data.game_name) ~= "string" then
+        logger:info("Unexpected JSON data: game_name is not string")
+        return nil
+    end
+
+    return game_data
+end
+
+-- Get search URL with fallback logic
+local function get_search_url()
+    if cached_search_url then
+        return cached_search_url
+    end
+
+    -- Try to extract from _app- scripts
+    local search_url = extract_search_url()
+
+    if search_url then
+        cached_search_url = M.BASE_URL .. search_url
+    else
+        logger:info("Using fallback search URL: " .. M.SEARCH_URL)
+        cached_search_url = M.SEARCH_URL
+    end
+
+    return cached_search_url
+end
+
+-- Get auth token (matches Python: send_website_get_auth_token)
+function M.get_auth_token(force_refresh)
+    local now = os.time()
+
+    if not force_refresh and cached_token and now < token_expires_at then
+        logger:info("Using cached auth token (expires in " .. (token_expires_at - now) .. "s)")
+        return cached_token, nil
+    end
+
+    logger:info("Fetching fresh auth token...")
+
+    -- Matches Python: get_auth_token_request_params()
+    local timestamp_ms = math.floor(now * 1000)
+    local url = M.BASE_URL .. "api/search/init?t=" .. timestamp_ms
+
+    -- Matches Python: get_title_request_headers()
+    local response, err = http.get(url, {
         headers = {
-            ["Referer"] = M.BASE_URL
+            ["User-Agent"] = USER_AGENT,
+            ["referer"] = M.REFERER_HEADER
         },
         timeout = M.TIMEOUT
     })
@@ -49,90 +328,242 @@ function M.get_auth_token()
         return nil, "No token in response"
     end
 
+    cached_token = data.token
+    token_expires_at = now + M.TOKEN_TTL
+    logger:info("Got auth token")
+
     return data.token, nil
 end
 
--- Search HLTB for games matching the query
--- Returns array of results or nil, error
-function M.search(query, options)
-    options = options or {}
-    local page = options.page or 1
-    local size = options.size or 20
+-- Build search payload (matches Python: get_search_request_data EXACTLY)
+local function get_search_request_data(game_name, modifier, page)
+    modifier = modifier or ""
+    page = page or 1
 
-    -- Get fresh auth token
-    local token, token_err = M.get_auth_token()
-    if not token then
-        return nil, "Auth failed: " .. (token_err or "unknown")
-    end
-
-    -- Split query into search terms
+    -- Split game name into search terms (matches Python: game_name.split())
     local search_terms = {}
-    for word in query:gmatch("%S+") do
+    for word in game_name:gmatch("%S+") do
         table.insert(search_terms, word)
     end
 
-    local payload = json.encode({
+    -- Matches Python payload EXACTLY
+    local payload = {
         searchType = "games",
         searchTerms = search_terms,
         searchPage = page,
-        size = size,
+        size = 20,
         searchOptions = {
             games = {
                 userId = 0,
                 platform = "",
                 sortCategory = "popular",
                 rangeCategory = "main",
-                modifier = ""
+                rangeTime = {
+                    min = 0,
+                    max = 0
+                },
+                gameplay = {
+                    perspective = "",
+                    flow = "",
+                    genre = "",
+                    difficulty = ""
+                },
+                rangeYear = {
+                    max = "",
+                    min = ""
+                },
+                modifier = modifier
+            },
+            users = {
+                sortCategory = "postcount"
+            },
+            lists = {
+                sortCategory = "follows"
             },
             filter = "",
             sort = 0,
             randomizer = 0
         },
         useCache = true
-    })
+    }
 
-    local response, err = http.request(M.BASE_URL .. "api/search", {
+    return json.encode(payload)
+end
+
+-- Build search headers (matches hltb-for-deck)
+local function get_search_request_headers(auth_token)
+    local headers = {
+        ["Content-Type"] = "application/json",
+        ["Origin"] = "https://howlongtobeat.com",
+        ["Referer"] = "https://howlongtobeat.com/",
+        ["Authority"] = "howlongtobeat.com",
+        ["User-Agent"] = USER_AGENT
+    }
+
+    if auth_token then
+        headers["x-auth-token"] = auth_token
+    end
+
+    return headers
+end
+
+-- Search HLTB (matches reference: fetchSearchResults)
+function M.search(query, options)
+    options = options or {}
+    local page = options.page or 1
+    local modifier = options.modifier or ""
+
+    -- Get auth token
+    local auth_token = M.get_auth_token()
+    if not auth_token then
+        logger:info("Failed to get auth token")
+        return nil
+    end
+
+    -- Get headers
+    local headers = get_search_request_headers(auth_token)
+
+    -- Get search URL (with extraction logic)
+    local search_url = get_search_url()
+    logger:info("Search URL: " .. search_url)
+
+    -- Get payload
+    local payload = get_search_request_data(query, modifier, page)
+
+    -- Make request
+    local response, err = http.request(search_url, {
         method = "POST",
-        headers = {
-            ["Content-Type"] = "application/json",
-            ["Referer"] = M.BASE_URL,
-            ["x-auth-token"] = token
-        },
+        headers = headers,
         data = payload,
         timeout = M.TIMEOUT
     })
 
     if not response then
-        return nil, "Request failed: " .. (err or "unknown")
+        logger:info("Search request failed: " .. (err or "unknown"))
+        return nil
     end
 
     if response.status ~= 200 then
-        return nil, "HTTP " .. response.status
+        logger:info("Search returned HTTP " .. response.status)
+        return nil
     end
 
     local success, data = pcall(json.decode, response.body)
     if not success or not data then
-        return nil, "Invalid JSON response"
+        logger:info("Invalid JSON response for search")
+        return nil
     end
 
-    if not data.data then
-        return {}, nil -- Empty results
+    -- Validate results array (matching reference: fetchSearchResults)
+    if type(data.data) ~= "table" then
+        logger:info("Unexpected JSON data for search results: data is not array")
+        return nil
     end
 
-    return data.data, nil
+    -- Validate each item has required fields
+    for _, item in ipairs(data.data) do
+        if type(item.game_id) ~= "number" then
+            logger:info("Unexpected JSON data for search results: game_id is not number")
+            return nil
+        end
+        if type(item.game_name) ~= "string" then
+            logger:info("Unexpected JSON data for search results: game_name is not string")
+            return nil
+        end
+        if type(item.comp_all_count) ~= "number" then
+            logger:info("Unexpected JSON data for search results: comp_all_count is not number")
+            return nil
+        end
+    end
+
+    return data
 end
 
--- Search and return best match only
--- Returns single result or nil, error
-function M.search_best_match(query, options)
-    local results, err = M.search(query, options)
-    if not results then
-        return nil, err
+-- Find most compatible game data (matches reference: fetchMostCompatibleGameData)
+function M.search_best_match(app_name, steam_app_id)
+    local search_results = M.search(app_name)
+    if not search_results then
+        return nil
     end
-    if #results == 0 then
-        return nil, "No results found"
+
+    if #search_results.data == 0 then
+        logger:info("No search results found")
+        return nil
     end
-    return results[1], nil
+
+    local game_data_cache = {}
+
+    -- Helper to get game data with caching
+    local function get_game_data(game_id)
+        if game_data_cache[game_id] then
+            return game_data_cache[game_id]
+        end
+        local data = fetch_game_data(game_id)
+        if data then
+            game_data_cache[game_id] = data
+        end
+        return data
+    end
+
+    -- Search by Steam app ID first (matching reference)
+    if steam_app_id then
+        for _, item in ipairs(search_results.data) do
+            local game_data = fetch_game_data(item.game_id)
+            if not game_data then
+                -- Reference: return null on error
+                return nil
+            end
+            game_data_cache[item.game_id] = game_data
+
+            if game_data.profile_steam == steam_app_id then
+                logger:info("Found match by Steam ID: " .. item.game_name)
+                return game_data
+            end
+        end
+    end
+
+    -- Search by exact app name (matching reference)
+    local normalized_search = utils.sanitize_game_name(app_name):lower()
+    for _, item in ipairs(search_results.data) do
+        if utils.sanitize_game_name(item.game_name):lower() == normalized_search then
+            logger:info("Found exact name match: " .. item.game_name)
+            return get_game_data(item.game_id)
+        end
+    end
+
+    -- Find closest match using Levenshtein distance (matching reference)
+    local possible_choices = {}
+    local normalized_app_name = utils.sanitize_game_name(app_name):lower()
+    for _, item in ipairs(search_results.data) do
+        local normalized_item_name = utils.sanitize_game_name(item.game_name):lower()
+        local distance = utils.levenshtein_distance(normalized_app_name, normalized_item_name)
+        table.insert(possible_choices, {
+            distance = distance,
+            comp_all_count = item.comp_all_count,
+            item = item
+        })
+    end
+
+    -- Sort by distance, then by comp_all_count descending (matching reference)
+    table.sort(possible_choices, function(a, b)
+        if a.distance == b.distance then
+            return a.comp_all_count > b.comp_all_count
+        end
+        return a.distance < b.distance
+    end)
+
+    if #possible_choices > 0 then
+        local best = possible_choices[1]
+        logger:info("Found closest match: " .. best.item.game_name .. " (distance: " .. best.distance .. ")")
+        return get_game_data(best.item.game_id)
+    end
+
+    return nil
+end
+
+-- Clear cached search URL (for retry on 404)
+function M.clear_search_url_cache()
+    cached_search_url = nil
 end
 
 return M

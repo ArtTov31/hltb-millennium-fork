@@ -13,7 +13,15 @@ const GetHltbData = callable<[{ app_id: number }], string>('GetHltbData');
 
 async function fetchFromBackend(appId: number): Promise<HltbGameResult | null> {
   try {
+    log('Calling backend for appId:', appId);
     const resultJson = await GetHltbData({ app_id: appId });
+    log('Backend returned:', typeof resultJson, resultJson);
+
+    if (resultJson === undefined || resultJson === null) {
+      logError('Backend returned undefined/null for appId:', appId);
+      return null;
+    }
+
     const result: BackendResponse = JSON.parse(resultJson);
 
     if (!result.success || !result.data) {
@@ -24,7 +32,7 @@ async function fetchFromBackend(appId: number): Promise<HltbGameResult | null> {
     setCache(appId, result.data);
     return result.data;
   } catch (e) {
-    logError('Backend call error:', e);
+    logError('Backend call error for appId:', appId, e);
     return null;
   }
 }

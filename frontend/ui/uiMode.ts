@@ -150,11 +150,12 @@ export function registerModeChangeListener(): void {
     // @ts-ignore
     SteamClient?.UI?.RegisterForUIModeChanged?.(async (newMode: EUIMode) => {
       log('UI mode changed to:', newMode === EUIMode.GamePad ? 'Big Picture' : 'Desktop');
-      const prevMode = currentMode;
       currentMode = newMode;
 
-      if (prevMode !== newMode) {
+      log('Fetching document for mode change...');
+      try {
         const doc = await fetchDocumentForMode(newMode);
+        log('fetchDocumentForMode returned:', doc ? 'document found' : 'undefined');
 
         if (doc) {
           if (newMode === EUIMode.GamePad) {
@@ -163,11 +164,13 @@ export function registerModeChangeListener(): void {
             desktopDocument = doc;
           }
 
-          log('Got new document for', newMode === EUIMode.GamePad ? 'Big Picture' : 'Desktop');
+          log('Calling', modeChangeCallbacks.length, 'mode change callbacks');
           modeChangeCallbacks.forEach((cb) => cb(newMode, doc));
         } else {
           log('Failed to get document for new mode');
         }
+      } catch (e) {
+        log('Error in mode change handler:', e);
       }
     });
   } catch (e) {

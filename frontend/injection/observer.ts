@@ -16,10 +16,13 @@ const MAX_RETRIES = 20;
 const RETRY_DELAY_MS = 250;
 
 let currentAppId: number | null = null;
+let processingAppId: number | null = null;
 let observer: MutationObserver | null = null;
 
 export function resetState(): void {
+  log('resetState called, clearing currentAppId');
   currentAppId = null;
+  processingAppId = null;
 }
 
 export function getCurrentAppId(): number | null {
@@ -34,22 +37,29 @@ async function handleGamePage(doc: Document, config: UIModeConfig): Promise<void
 
   const { appId, container } = gamePage;
 
+  // Already processing this specific app - prevent re-entry from MutationObserver
+  if (appId === processingAppId) {
+    return;
+  }
+
   // Check if display already exists for this app
   const existingDisplay = getExistingDisplay(doc);
   if (appId === currentAppId && existingDisplay) {
     return;
   }
 
+  // Set processing lock before any DOM modifications
+  processingAppId = appId;
   currentAppId = appId;
   log('Found game page for appId:', appId);
 
-  removeExistingDisplay(doc);
-
-  // Ensure container has relative positioning for absolute child
-  container.style.position = 'relative';
-  container.appendChild(createLoadingDisplay(doc));
-
   try {
+    removeExistingDisplay(doc);
+
+    // Ensure container has relative positioning for absolute child
+    container.style.position = 'relative';
+    container.appendChild(createLoadingDisplay(doc));
+
     const result = await fetchHltbData(appId);
 
     const updateDisplayForApp = (targetAppId: number) => {
@@ -59,7 +69,7 @@ async function handleGamePage(doc: Document, config: UIModeConfig): Promise<void
       const cached = getCache(targetAppId);
       const data = cached?.entry?.data;
 
-      if (data && (data.comp_main > 0 || data.comp_plus > 0 || data.comp_100 > 0)) {
+      if (data && ((data.comp_main && data.comp_main > 0) || (data.comp_plus && data.comp_plus > 0) || (data.comp_100 && data.comp_100 > 0))) {
         existing.innerHTML = createDisplay(doc, data).innerHTML;
         return true;
       }
@@ -85,6 +95,11 @@ async function handleGamePage(doc: Document, config: UIModeConfig): Promise<void
     }
   } catch (e) {
     log('Error fetching HLTB data:', e);
+  } finally {
+    // Clear processing lock only if we're still processing this app
+    if (processingAppId === appId) {
+      processingAppId = null;
+    }
   }
 }
 

@@ -9,7 +9,7 @@ This document lists all source materials, related projects, and documentation us
 The primary inspiration for this plugin. A Decky Loader plugin that displays HLTB data on Steam Deck.
 
 - Reddit announcement: https://www.reddit.com/r/SteamDeck/comments/yf6md3/hltb_for_deck_how_long_to_beat_data_added_to_the/
-- GitHub repository: https://github.com/hulkrelax/hltb-for-deck
+- GitHub repository: https://github.com/morwy/hltb-for-deck/
 
 Key files studied:
 - `src/index.tsx` - Plugin initialization and route patching

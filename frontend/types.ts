@@ -2,10 +2,10 @@
 export interface HltbGameResult {
   game_id: number;
   game_name: string;
-  comp_main: number; // seconds
-  comp_plus: number; // seconds
-  comp_100: number; // seconds
-  comp_all: number; // seconds
+  comp_main: number | null; // hours
+  comp_plus: number | null; // hours
+  comp_100: number | null; // hours
+  comp_all: number | null; // hours
 }
 
 // Cache entry for localStorage

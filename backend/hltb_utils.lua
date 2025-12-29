@@ -1,0 +1,79 @@
+--[[
+    Shared utilities
+]]
+
+local M = {}
+
+-- Calculate Levenshtein distance between two strings
+function M.levenshtein_distance(s1, s2)
+    local len1, len2 = #s1, #s2
+    local matrix = {}
+
+    for i = 0, len1 do
+        matrix[i] = { [0] = i }
+    end
+    for j = 0, len2 do
+        matrix[0][j] = j
+    end
+
+    for i = 1, len1 do
+        for j = 1, len2 do
+            local cost = (s1:sub(i, i) == s2:sub(j, j)) and 0 or 1
+            matrix[i][j] = math.min(
+                matrix[i - 1][j] + 1,
+                matrix[i][j - 1] + 1,
+                matrix[i - 1][j - 1] + cost
+            )
+        end
+    end
+
+    return matrix[len1][len2]
+end
+
+-- Sanitize game name for search/comparison (remove TM/copyright, keep accented letters)
+function M.sanitize_game_name(name)
+    -- Remove trademark/copyright symbols only (keep accented letters)
+    name = name:gsub("™", "")
+    name = name:gsub("®", "")
+    name = name:gsub("©", "")
+    -- Remove common edition suffixes
+    name = name:gsub("%s*[-:]%s*[Dd]efinitive%s+[Ee]dition", "")
+    name = name:gsub("%s*[-:]%s*[Uu]ltimate%s+[Ee]dition", "")
+    name = name:gsub("%s*[-:]%s*[Cc]omplete%s+[Ee]dition", "")
+    name = name:gsub("%s*[-:]%s*GOTY%s*[Ee]?d?i?t?i?o?n?", "")
+    name = name:gsub("%s*[-:]%s*[Gg]ame%s+of%s+the%s+[Yy]ear%s*[Ee]?d?i?t?i?o?n?", "")
+    -- Clean up whitespace
+    name = name:gsub("%s+", " ")
+    name = name:match("^%s*(.-)%s*$") or name
+    return name
+end
+
+-- Calculate similarity between two strings (0.0 to 1.0)
+function M.calculate_similarity(s1, s2)
+    local norm_s1 = M.sanitize_game_name(s1):lower()
+    local norm_s2 = M.sanitize_game_name(s2):lower()
+
+    if norm_s1 == "" or norm_s2 == "" then
+        return 0
+    end
+
+    if norm_s1 == norm_s2 then
+        return 1.0
+    end
+
+    local distance = M.levenshtein_distance(norm_s1, norm_s2)
+    local max_len = math.max(#norm_s1, #norm_s2)
+    local similarity = 1.0 - (distance / max_len)
+
+    return math.floor(similarity * 100) / 100
+end
+
+-- Convert seconds to hours (1 decimal place), nil for 0/missing
+function M.seconds_to_hours(seconds)
+    if not seconds or seconds <= 0 then
+        return nil
+    end
+    return math.floor((seconds / 3600) * 10 + 0.5) / 10
+end
+
+return M

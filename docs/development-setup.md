@@ -110,8 +110,10 @@ hltb-millenium-plugin/
 │   ├── injection/          # Game page detection
 │   ├── services/           # API and cache services
 │   └── ui/                 # UI mode and selectors
-├── backend/                 # Python backend
-│   └── main.py             # HLTB lookups
+├── backend/                 # Lua backend
+│   ├── main.lua            # Entry point
+│   ├── hltb.lua            # HLTB API client
+│   └── steam.lua           # Steam API helpers
 ├── webkit/                  # WebKit entry
 ├── plugin.json             # Plugin manifest
 ├── package.json            # Dependencies

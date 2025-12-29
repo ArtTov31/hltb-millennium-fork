@@ -44,7 +44,7 @@ Different types of changes require different reload procedures:
 |-------------|-------------|
 | Frontend TypeScript/React | Press F5 in Steam window |
 | CSS styles | Press F5 in Steam window |
-| Backend Python code | Full Steam restart required |
+| Backend Lua code | Full Steam restart required |
 | plugin.json changes | Full Steam restart required |
 
 ### Quick Iteration Cycle
@@ -95,13 +95,12 @@ console.error('Error');
 
 Logs appear in the SharedJSContext tab of DevTools.
 
-Backend (Python):
-```python
-import PluginUtils
-logger = PluginUtils.Logger()
-logger.log("Info message")
-logger.warn("Warning message")
-logger.error("Error message")
+Backend (Lua):
+```lua
+local logger = require("logger")
+logger:info("Info message")
+logger:warn("Warning message")
+logger:error("Error message")
 ```
 
 Backend logs appear in the Millennium log file.
@@ -208,5 +207,5 @@ This error typically indicates Steam updated and broke UI component compatibilit
 
 If fetch requests fail with CORS errors:
 1. Check browser DevTools Network tab for details
-2. Use the Python backend for API calls (already implemented)
+2. Use the Lua backend for API calls (already implemented)
 3. Verify request headers match expected format

@@ -270,7 +270,7 @@ HLTB may rate limit aggressive requests. Mitigation strategies:
 
 Browser-based requests to the HLTB API are blocked by CORS. Solution:
 
-1. Python backend handles all HLTB requests using `howlongtobeatpy`
+1. Lua backend handles all HLTB requests using custom HTTP client
 2. Frontend calls backend via `Millennium.callServerMethod()`
 3. Backend returns JSON data to frontend
 

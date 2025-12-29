@@ -4,6 +4,10 @@ This project is a [Millennium](https://steambrew.app/) plugin that displays [How
 
 ## Development flow
 
+### If unsure or stuck ask the user
+- If the user asks you to do something and it fails, do not silently move on. Ask the user for help.
+- If you are unsure about what to do or the user requirements are unclear ask for clarification.
+
 ### Always plan first
 - Typical workflow: user makes a request, you formulate a plan, you share the plan for approval. If approved you implement the plan.
 - NEVER assume that presenting a good plan means you should implement it. Request approval.

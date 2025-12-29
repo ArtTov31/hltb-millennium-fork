@@ -46,7 +46,7 @@ Once installed, HLTB data automatically appears on game pages in your Steam libr
 ## How It Works
 
 1. When you view a game page, the plugin detects the Steam App ID
-2. It queries the Steam API to get the game name
+2. The Lua backend queries the Steam API to get the game name
 3. It searches How Long To Beat for matching games
 4. Results are cached locally and displayed on the game header
 
@@ -74,9 +74,9 @@ To test, launch Steam with Millennium in dev mode.
 ## Credits
 
 - [How Long To Beat](https://howlongtobeat.com/) for the game completion data
-- [HLTB for Deck](https://github.com/hulkrelax/hltb-for-deck) for inspiration
+- [HLTB for Deck](https://github.com/morwy/hltb-for-deck/) for inspiration
 - [Millennium](https://steambrew.app/) for the plugin framework
-- [howlongtobeatpy](https://pypi.org/project/howlongtobeatpy/) for the Python API wrapper
+- [HowLongToBeat-PythonAPI](https://github.com/ScrappyCocco/HowLongToBeat-PythonAPI) for HLTB API reference implementation
 
 ## Disclaimer
 

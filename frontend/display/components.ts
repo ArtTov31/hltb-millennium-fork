@@ -2,11 +2,10 @@ import type { HltbGameResult } from '../types';
 
 const CONTAINER_ID = 'hltb-for-millennium';
 
-export function formatTime(seconds: number): string {
-  if (!seconds || seconds === 0) return '--';
-  const hours = Math.round((seconds / 3600) * 10) / 10;
+export function formatTime(hours: number | null): string {
+  if (!hours || hours === 0) return '--';
   if (hours < 1) {
-    const mins = Math.round(seconds / 60);
+    const mins = Math.round(hours * 60);
     return `${mins}m`;
   }
   return `${hours}h`;
@@ -46,7 +45,7 @@ export function createDisplay(doc: Document, data: HltbGameResult): HTMLElement 
 
   let statsHtml = '';
 
-  if (data.comp_main > 0) {
+  if (data.comp_main && data.comp_main > 0) {
     statsHtml += `
       <li>
         <p class="hltb-gametime">${formatTime(data.comp_main)}</p>
@@ -54,7 +53,7 @@ export function createDisplay(doc: Document, data: HltbGameResult): HTMLElement 
       </li>`;
   }
 
-  if (data.comp_plus > 0) {
+  if (data.comp_plus && data.comp_plus > 0) {
     statsHtml += `
       <li>
         <p class="hltb-gametime">${formatTime(data.comp_plus)}</p>
@@ -62,7 +61,7 @@ export function createDisplay(doc: Document, data: HltbGameResult): HTMLElement 
       </li>`;
   }
 
-  if (data.comp_100 > 0) {
+  if (data.comp_100 && data.comp_100 > 0) {
     statsHtml += `
       <li>
         <p class="hltb-gametime">${formatTime(data.comp_100)}</p>

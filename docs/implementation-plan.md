@@ -42,7 +42,9 @@ hltb-millennium-plugin/
 │       ├── selectors.ts
 │       └── uiMode.ts
 ├── backend/
-│   └── main.py
+│   ├── main.lua
+│   ├── hltb.lua
+│   └── steam.lua
 └── webkit/
     └── index.tsx
 ```
@@ -384,7 +386,9 @@ hltb-millennium-plugin/
 │       ├── selectors.ts
 │       └── uiMode.ts
 ├── backend/
-│   └── main.py
+│   ├── main.lua
+│   ├── hltb.lua
+│   └── steam.lua
 ├── webkit/
 │   └── index.tsx
 ├── plugin.json
