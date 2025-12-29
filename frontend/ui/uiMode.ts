@@ -152,10 +152,9 @@ export function registerModeChangeListener(): void {
       log('UI mode changed to:', newMode === EUIMode.GamePad ? 'Big Picture' : 'Desktop');
       currentMode = newMode;
 
-      log('Fetching document for mode change...');
       try {
         const doc = await fetchDocumentForMode(newMode);
-        log('fetchDocumentForMode returned:', doc ? 'document found' : 'undefined');
+        log('fetchDocumentForMode returned:', doc ? 'found' : 'not found');
 
         if (doc) {
           if (newMode === EUIMode.GamePad) {
@@ -163,11 +162,7 @@ export function registerModeChangeListener(): void {
           } else {
             desktopDocument = doc;
           }
-
-          log('Calling', modeChangeCallbacks.length, 'mode change callbacks');
           modeChangeCallbacks.forEach((cb) => cb(newMode, doc));
-        } else {
-          log('Failed to get document for new mode');
         }
       } catch (e) {
         log('Error in mode change handler:', e);

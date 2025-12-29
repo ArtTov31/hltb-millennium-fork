@@ -15,7 +15,6 @@ async function fetchFromBackend(appId: number): Promise<HltbGameResult | null> {
   try {
     log('Calling backend for appId:', appId);
     const resultJson = await GetHltbData({ app_id: appId });
-    log('Backend returned:', typeof resultJson, resultJson);
 
     if (resultJson === undefined || resultJson === null) {
       logError('Backend returned undefined/null for appId:', appId);
@@ -44,10 +43,11 @@ export async function fetchHltbData(appId: number): Promise<FetchResult> {
     const cachedData = cached.entry.notFound ? null : cached.entry.data;
 
     if (cached.isStale) {
-      log('Returning stale cache, refreshing...');
+      log('Stale cache hit for appId:', appId);
       const refreshPromise = fetchFromBackend(appId);
       return { data: cachedData, fromCache: true, refreshPromise };
     } else {
+      log('Cache hit for appId:', appId);
       return { data: cachedData, fromCache: true, refreshPromise: null };
     }
   }

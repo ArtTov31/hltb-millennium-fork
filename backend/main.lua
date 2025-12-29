@@ -10,6 +10,7 @@ local json = require("json")
 local hltb = require("hltb")
 local steam = require("steam")
 local utils = require("hltb_utils")
+local name_fixes = require("name_fixes")
 
 -- Main function called by frontend
 function GetHltbData(app_id)
@@ -24,6 +25,13 @@ function GetHltbData(app_id)
         end
 
         logger:info("Got game name: " .. game_name)
+
+        -- Apply manual name fix if available
+        local fixed_name = name_fixes[game_name]
+        if fixed_name then
+            logger:info("Applied name fix: " .. fixed_name)
+            game_name = fixed_name
+        end
 
         -- Sanitize for better search matching
         local search_name = utils.sanitize_game_name(game_name)

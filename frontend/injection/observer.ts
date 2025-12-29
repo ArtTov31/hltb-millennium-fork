@@ -20,13 +20,8 @@ let processingAppId: number | null = null;
 let observer: MutationObserver | null = null;
 
 export function resetState(): void {
-  log('resetState called, clearing currentAppId');
   currentAppId = null;
   processingAppId = null;
-}
-
-export function getCurrentAppId(): number | null {
-  return currentAppId;
 }
 
 async function handleGamePage(doc: Document, config: UIModeConfig): Promise<void> {
@@ -69,21 +64,23 @@ async function handleGamePage(doc: Document, config: UIModeConfig): Promise<void
       const cached = getCache(targetAppId);
       const data = cached?.entry?.data;
 
-      if (data && ((data.comp_main && data.comp_main > 0) || (data.comp_plus && data.comp_plus > 0) || (data.comp_100 && data.comp_100 > 0))) {
+      if (data && (data.comp_main || data.comp_plus || data.comp_100)) {
         existing.innerHTML = createDisplay(doc, data).innerHTML;
         return true;
       }
       return false;
     };
 
-    // Always try to update display for the current game (might be different from fetched game)
-    if (currentAppId !== appId) {
+    // If game changed during fetch, update display for the new game instead
+    if (currentAppId !== null && currentAppId !== appId) {
       log('Game changed during fetch, updating display for current game:', currentAppId);
       updateDisplayForApp(currentAppId);
       return;
     }
 
-    updateDisplayForApp(appId);
+    if (updateDisplayForApp(appId)) {
+      log('Display updated for appId:', appId);
+    }
 
     // Handle background refresh for stale data
     if (result.refreshPromise) {

@@ -9,9 +9,9 @@
 
     Usage:
         local hltb = require("hltb")
-        local results, err = hltb.search("Dark Souls")
-        if results then
-            print(results[1].game_name, results[1].comp_main)
+        local game_data = hltb.search_best_match("Dark Souls", steam_app_id)
+        if game_data then
+            print(game_data.game_name, game_data.comp_main)
         end
 ]]
 
@@ -38,17 +38,25 @@ local token_expires_at = 0
 -- User agent for requests
 local USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+-- Known non-search API endpoints to skip
+local SKIP_ENDPOINTS = {
+    find = true,
+    error = true,
+    user = true,
+    logout = true
+}
+
 -- Extract search endpoint from website JavaScript
--- Matches hltb-for-deck: only looks at _app- scripts
+-- Searches all NextJS chunk scripts for fetch POST calls to /api/*
 local function extract_search_url()
     logger:info("Extracting search endpoint from website...")
 
-    -- Get homepage
     local headers = {
         ["User-Agent"] = USER_AGENT,
         ["referer"] = M.REFERER_HEADER
     }
 
+    -- Get homepage
     local response, err = http.get(M.BASE_URL, {
         headers = headers,
         timeout = M.TIMEOUT
@@ -59,67 +67,53 @@ local function extract_search_url()
         return nil
     end
 
-    logger:info("Homepage fetched, length: " .. #response.body)
-
-    -- Find script tags with '_app-' in src (matching hltb-for-deck)
+    -- Find all chunk scripts: _next/static/chunks/*.js
     local script_urls = {}
-    for src in response.body:gmatch('<script[^>]+src="([^"]+)"') do
-        if src:find('_app%-') then
-            table.insert(script_urls, src)
-            logger:info("Found _app script: " .. src)
-        end
+    for src in response.body:gmatch('["\'](/_next/static/chunks/[^"\']+%.js)["\']') do
+        table.insert(script_urls, src)
     end
 
-    logger:info("Found " .. #script_urls .. " _app script(s)")
+    logger:info("Found " .. #script_urls .. " chunk script(s)")
 
-    -- Try each script
-    for i, script_src in ipairs(script_urls) do
-        local script_url = M.BASE_URL .. script_src
-        logger:info("Checking script " .. i .. ": " .. script_src:sub(1, 60))
+    -- Check each script for POST fetch to /api/*
+    local endpoints_found = {}
+    for _, script_src in ipairs(script_urls) do
+        local script_url = M.BASE_URL .. script_src:sub(2) -- remove leading /
 
-        local script_resp, script_err = http.get(script_url, {
+        local script_resp = http.get(script_url, {
             headers = headers,
             timeout = M.TIMEOUT
         })
 
         if script_resp and script_resp.status == 200 and script_resp.body then
-            logger:info("Script loaded, length: " .. #script_resp.body)
-
-            -- Match Python regex:
-            -- r'fetch\s*\(\s*["\']/api/([a-zA-Z0-9_/]+)[^"\']*["\']\s*,\s*{[^}]*method:\s*["\']POST["\'][^}]*}'
-            --
-            -- This looks for: fetch("/api/xxx",{...method:"POST"...})
-            -- Key: the method:"POST" must be in the same {...} block after the URL
-
-            -- Lua patterns can't do [^}]* properly with nested content, so use a simpler approach:
-            -- Find all /api/xxx patterns and verify they're in a fetch POST context
-
             local content = script_resp.body
 
-            -- Look for patterns like: fetch("/api/search",{method:"POST"
-            -- or fetch('/api/search',{method:'POST'
-            for api_path in content:gmatch('fetch%s*%(%s*["\'](/api/[a-zA-Z0-9_]+)["\']') do
-                logger:info("Found fetch with API path: " .. api_path)
+            -- Look for: "/api/xxx" with POST nearby
+            -- Pattern: fetch("/api/endpoint",{...method:"POST"...})
+            for api_path in content:gmatch('["\'](/api/[a-zA-Z0-9_]+)["\']') do
+                local endpoint = api_path:match('/api/([a-zA-Z0-9_]+)')
 
-                -- Find position to check context after the path
-                local pattern = 'fetch%s*%(%s*["\']' .. api_path:gsub('/', '%%/') .. '["\']%s*,%s*{[^}]-method%s*:%s*["\']POST["\']'
-                if content:find(pattern) then
-                    logger:info("Confirmed POST method for: " .. api_path)
+                if endpoint and not endpoints_found[endpoint] then
+                    endpoints_found[endpoint] = true
 
-                    -- Extract base path
-                    local path_suffix = api_path:match('/api/([a-zA-Z0-9_]+)')
-                    if path_suffix and path_suffix ~= "find" then
-                        local full_endpoint = "api/" .. path_suffix
-                        logger:info("Found search endpoint: " .. full_endpoint)
-                        return full_endpoint
+                    if SKIP_ENDPOINTS[endpoint] then
+                        logger:info("Skipping endpoint: /api/" .. endpoint)
                     else
-                        logger:info("Skipping path (find or invalid): " .. tostring(path_suffix))
+                        -- Verify it's used with POST method
+                        local pattern = 'fetch%s*%(%s*["\']' .. api_path:gsub('/', '%%/') .. '["\']%s*,%s*{[^}]-method%s*:%s*["\']POST["\']'
+                        if content:find(pattern) then
+                            logger:info("Found search endpoint: /api/" .. endpoint)
+                            return "api/" .. endpoint
+                        else
+                            logger:info("Endpoint /api/" .. endpoint .. " not used with POST")
+                        end
                     end
                 end
             end
         end
     end
 
+    logger:info("No valid search endpoint found in " .. #script_urls .. " scripts")
     return nil
 end
 
@@ -279,9 +273,10 @@ local function get_search_url()
 
     if search_url then
         cached_search_url = M.BASE_URL .. search_url
+        logger:info("Search URL: " .. cached_search_url)
     else
-        logger:info("Using fallback search URL: " .. M.SEARCH_URL)
         cached_search_url = M.SEARCH_URL
+        logger:info("Using fallback search URL: " .. cached_search_url)
     end
 
     return cached_search_url
@@ -292,11 +287,10 @@ function M.get_auth_token(force_refresh)
     local now = os.time()
 
     if not force_refresh and cached_token and now < token_expires_at then
-        logger:info("Using cached auth token (expires in " .. (token_expires_at - now) .. "s)")
         return cached_token, nil
     end
 
-    logger:info("Fetching fresh auth token...")
+    logger:info("Fetching auth token...")
 
     -- Matches Python: get_auth_token_request_params()
     local timestamp_ms = math.floor(now * 1000)
@@ -425,7 +419,6 @@ function M.search(query, options)
 
     -- Get search URL (with extraction logic)
     local search_url = get_search_url()
-    logger:info("Search URL: " .. search_url)
 
     -- Get payload
     local payload = get_search_request_data(query, modifier, page)
@@ -481,15 +474,19 @@ end
 
 -- Find most compatible game data (matches reference: fetchMostCompatibleGameData)
 function M.search_best_match(app_name, steam_app_id)
+    logger:info("Searching HLTB for: " .. app_name)
+
     local search_results = M.search(app_name)
     if not search_results then
         return nil
     end
 
     if #search_results.data == 0 then
-        logger:info("No search results found")
+        logger:info("No search results found for: " .. app_name)
         return nil
     end
+
+    logger:info("Found " .. #search_results.data .. " search results")
 
     local game_data_cache = {}
 
@@ -523,9 +520,9 @@ function M.search_best_match(app_name, steam_app_id)
     end
 
     -- Search by exact app name (matching reference)
-    local normalized_search = utils.sanitize_game_name(app_name):lower()
+    local normalized_app_name = utils.sanitize_game_name(app_name):lower()
     for _, item in ipairs(search_results.data) do
-        if utils.sanitize_game_name(item.game_name):lower() == normalized_search then
+        if utils.sanitize_game_name(item.game_name):lower() == normalized_app_name then
             logger:info("Found exact name match: " .. item.game_name)
             return get_game_data(item.game_id)
         end
@@ -533,7 +530,6 @@ function M.search_best_match(app_name, steam_app_id)
 
     -- Find closest match using Levenshtein distance (matching reference)
     local possible_choices = {}
-    local normalized_app_name = utils.sanitize_game_name(app_name):lower()
     for _, item in ipairs(search_results.data) do
         local normalized_item_name = utils.sanitize_game_name(item.game_name):lower()
         local distance = utils.levenshtein_distance(normalized_app_name, normalized_item_name)
@@ -561,9 +557,12 @@ function M.search_best_match(app_name, steam_app_id)
     return nil
 end
 
--- Clear cached search URL (for retry on 404)
-function M.clear_search_url_cache()
+-- Clear cached values (for retry on 404/stale data)
+function M.clear_cache()
     cached_search_url = nil
+    cached_build_id = nil
+    cached_token = nil
+    token_expires_at = 0
 end
 
 return M
