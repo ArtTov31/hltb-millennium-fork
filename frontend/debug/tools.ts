@@ -93,3 +93,13 @@ export function exposeDebugTools(doc: Document): void {
 
   log('Debug tools exposed. Use hltbDebug.logDOM(), hltbDebug.findImages(), etc.');
 }
+
+export function removeDebugTools(doc: Document): void {
+  // @ts-ignore
+  if (doc.defaultView) {
+    // @ts-ignore
+    delete doc.defaultView.hltbDebug;
+  }
+  // @ts-ignore
+  delete globalThis.hltbDebug;
+}

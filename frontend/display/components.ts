@@ -71,9 +71,7 @@ export function createDisplay(doc: Document, data: HltbGameResult): HTMLElement 
 
   statsHtml += `
     <li>
-      <button class="hltb-details-btn" onclick="window.open('steam://openurl_external/${hltbUrl}')">
-        View Details
-      </button>
+      <button class="hltb-details-btn">View Details</button>
     </li>`;
 
   container.innerHTML = `
@@ -81,6 +79,11 @@ export function createDisplay(doc: Document, data: HltbGameResult): HTMLElement 
       <ul>${statsHtml}</ul>
     </div>
   `;
+
+  const button = container.querySelector('.hltb-details-btn');
+  button?.addEventListener('click', () => {
+    window.open(`steam://openurl_external/${hltbUrl}`);
+  });
 
   return container;
 }

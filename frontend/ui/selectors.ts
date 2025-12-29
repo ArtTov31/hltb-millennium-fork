@@ -11,7 +11,8 @@ export const DESKTOP_CONFIG: UIModeConfig = {
 };
 
 // Big Picture / GamePad mode selectors
-// Currently same as desktop, but kept separate for future-proofing
+// Intentionally duplicated from desktop - kept separate so modes can diverge if Steam
+// uses different selectors for Big Picture vs Desktop in the future
 export const GAMEPAD_CONFIG: UIModeConfig = {
   mode: EUIMode.GamePad,
   modeName: 'Big Picture',

@@ -3,14 +3,19 @@ import { log } from './services/logger';
 import {
   initUIMode,
   getCurrentConfig,
+  getCurrentDocument,
   registerModeChangeListener,
   onModeChange,
 } from './ui/uiMode';
-import { setupObserver, resetState } from './injection/observer';
-import { exposeDebugTools } from './debug/tools';
+import { setupObserver, resetState, disconnectObserver } from './injection/observer';
+import { exposeDebugTools, removeDebugTools } from './debug/tools';
+import { removeStyles } from './display/styles';
+import { removeExistingDisplay } from './display/components';
 import { clearCache, getCacheStats } from './services/cache';
 
 const { useState } = (window as any).SP_REACT;
+
+let unsubscribeModeChange: (() => void) | null = null;
 
 async function init(): Promise<void> {
   log('Initializing HLTB plugin...');
@@ -31,7 +36,7 @@ async function init(): Promise<void> {
 
     registerModeChangeListener();
 
-    onModeChange(async (newMode, newDoc) => {
+    unsubscribeModeChange = onModeChange(async (newMode, newDoc) => {
       log('Reinitializing for mode change...');
       resetState();
       const newConfig = getCurrentConfig();
@@ -42,6 +47,27 @@ async function init(): Promise<void> {
   } catch (e) {
     log('Failed to initialize:', e);
   }
+}
+
+function cleanup(): void {
+  log('Cleaning up HLTB plugin...');
+
+  if (unsubscribeModeChange) {
+    unsubscribeModeChange();
+    unsubscribeModeChange = null;
+  }
+
+  disconnectObserver();
+
+  const doc = getCurrentDocument();
+  if (doc) {
+    removeDebugTools(doc);
+    removeStyles(doc);
+    removeExistingDisplay(doc);
+  }
+
+  resetState();
+  log('HLTB plugin cleanup complete');
 }
 
 const SettingsContent = () => {
@@ -83,5 +109,6 @@ export default definePlugin(() => {
     title: 'HLTB for Steam',
     icon: <IconsModule.Settings />,
     content: <SettingsContent />,
+    onUnload: cleanup,
   };
 });

@@ -69,3 +69,7 @@ export function injectStyles(doc: Document): void {
   style.textContent = HLTB_STYLES;
   doc.head.appendChild(style);
 }
+
+export function removeStyles(doc: Document): void {
+  doc.getElementById(STYLE_ID)?.remove();
+}
