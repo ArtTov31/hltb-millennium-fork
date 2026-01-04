@@ -40,15 +40,20 @@ Once installed, HLTB data automatically appears on game pages in your Steam libr
 3. It searches How Long To Beat for matching games
 4. Results are cached locally and displayed on the game header
 
-There is a settings page where you can view the current cache stats or clear the cache, mainly useful for testing.
+## Settings
 
-HLTB uses name based search, and often times the name in HLTB does not match Steam. Most of the time it just works. Occasionally it does not, and so there is a [name fixes](./backend/name_fixes.lua) file. Some internal name simplification is done to handle frequent issues, but there are still some edge cases. Feel free to submit a PR for any additional name fixes.
+Access settings via Steam menu > Millennium Library Manger > HLTB for Steam.
+
+- Horizontal Offset (px): Shifts the HLTB box left from the right edge.
+  - Useful to avoid covering Steam UI elements like the "done" button when adjusting custom game logo position.
+- Show View Details Link: Toggle the link to the HLTB game page on or off.
+- Cache Statistics / Clear Cache: View or clear locally cached HLTB data.
 
 ## Known Limitations
 
-- Games not in the HLTB database will show placeholder dashes
-- Some games may not match correctly due to name differences between Steam and HLTB
-- DLC and non-game content will not have HLTB data
+HLTB uses name based search, and often times the name in HLTB does not match Steam. Most of the time it just works. Occasionally it does not, and so there is a [name fixes](./backend/name_fixes.lua) file. Some internal name simplification is done to handle frequent issues, but there are still some edge cases. Feel free to submit a PR for any additional name fixes.
+
+Also note that DLC and non-game content will not have HLTB data.
 
 ## Development
 

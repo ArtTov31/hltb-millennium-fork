@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { definePlugin, Millennium, IconsModule, Field, DialogButton, TextField } from '@steambrew/client';
+import { definePlugin, Millennium, IconsModule, Field, DialogButton } from '@steambrew/client';
 import { log } from './services/logger';
 import { LIBRARY_SELECTORS } from './types';
 import { setupObserver, resetState, disconnectObserver, refreshDisplay } from './injection/observer';
@@ -57,14 +57,15 @@ const SettingsContent = () => {
 
   return (
     <>
-      <TextField
-        label="Horizontal Offset (px)"
-        description="Distance from right edge. Default: 0"
-        value={horizontalOffset}
-        onChange={onOffsetChange}
-        mustBeNumeric
-        rangeMin={0}
-      />
+      <Field label="Horizontal Offset (px)" description="Distance from right edge. Default: 0" bottomSeparator="standard">
+        <input
+          type="number"
+          min={0}
+          value={horizontalOffset}
+          onChange={onOffsetChange}
+          style={{ width: '60px', padding: '4px 8px' }}
+        />
+      </Field>
       <Field label="Show View Details Link" description="Display link to HLTB game page" bottomSeparator="standard">
         <input
           type="checkbox"
