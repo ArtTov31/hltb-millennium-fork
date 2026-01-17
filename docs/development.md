@@ -15,7 +15,7 @@ npm install
 
 Create symlink to Steam plugins folder (run as Admin):
 ```cmd
-mklink /D "C:\Program Files (x86)\Steam\plugins\hltb-millennium-plugin" "D:\path\to\hltb-millennium-plugin"
+cmd /c mklink /D "C:\Program Files (x86)\Steam\plugins\hltb-millennium-plugin-dev" "D:\path\to\hltb-millennium-plugin"
 ```
 
 ## Setup (Linux)
