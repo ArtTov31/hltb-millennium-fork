@@ -18,11 +18,12 @@ M.STORE_API_URL = "https://store.steampowered.com/api/appdetails"
 M.TIMEOUT = 10
 
 -- Get game details from Steam API
+-- Always request English to ensure consistent names for HLTB matching
 function M.get_app_details(app_id)
     if not app_id then
         return nil, "app_id is nil"
     end
-    local url = M.STORE_API_URL .. "?appids=" .. app_id
+    local url = M.STORE_API_URL .. "?appids=" .. app_id .. "&l=english"
 
     local response, err = http.get(url, { timeout = M.TIMEOUT })
 
