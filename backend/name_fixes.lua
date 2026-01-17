@@ -37,4 +37,12 @@ return {
     ["Baldur's Gate 3"] = "Baldur's Gate 3",
     ["Vampire Survivors"] = "Vampire Survivors",
     ["The Deed: Dynasty"] = "The Deed: Dynasty",
+    ["Borderlands 2 RU"] = "Borderlands 2",
+    ["Dead Rising 3 Apocalypse Edition"] = "Dead Rising 3",
+    ["Dying Light 2 Stay Human: Reloaded Edition"] = "Dying Light 2 Stay Human",
+    ["HELLDIVERS Dive Harder Edition"] = "Helldivers",
+    ["Heroes of Might & Magic V"] = "Heroes of Might and Magic V",
+    ["Heroes of Might & Magic V: Hammers of Fate"] = "Heroes of Might and Magic V: Hammers of Fate",
+    ["Heroes of Might & Magic V: Tribes of the East"] = "Heroes of Might and Magic V: Tribes of the East",
+    ["Might & Magic X - Legacy"] = "Might and Magic X: Legacy",
 }
