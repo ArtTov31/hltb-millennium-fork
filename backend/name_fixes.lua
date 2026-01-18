@@ -26,6 +26,8 @@ return {
     ["LEGO Star Wars III - The Clone Wars"] = "LEGO Star Wars III: The Clone Wars",
     ["Lewd Girls, Leave Me Alone! I Just Want to Play Video Games and Watch Anime! ~ Hentai Edition"] = "Lewd Girls, Leave Me Alone! I Just Want to Play Video Games and Watch Anime! Hentai Edition",
     ["Life Goes On: Done to Death"] = "Life Goes On",
+    ["Lobotomy Corporation | Monster Management Simulation"] = "Lobotomy Corporation",
+    ["Machinika: Museum"] = "Machinika Museum",
     ["Marvel’s Spider-Man Remastered"] = "Marvel's Spider-Man Remastered",
     ["Meadow - A Shelter Game"] = "Meadow",
     ["Might & Magic X - Legacy"] = "Might and Magic X: Legacy",
@@ -33,6 +35,8 @@ return {
     ["Ranch Simulator: Build, Hunt, Farm"] = "Ranch Simulator",
     ["Rock of Ages 2: Bigger & Boulder"] = "Rock of Ages II: Bigger & Boulder",
     ["Sea of Thieves: 2025 Edition"] = "Sea of Thieves",
+    ["SEGA Mega Drive and Genesis Classics"] = "SEGA Genesis Classics Collection",
+    ["Space Pilgrim Episode II: Epsilon Indi"] = "Space Pilgrim: Episode Two - Epsilon Indi",
     ["STAR WARS Battlefront II (Classic, 2005)"] = "STAR WARS Battlefront II",
     ["Warhammer 40,000: Dawn of War II: Retribution"] = "Warhammer 40,000: Dawn of War II - Retribution",
 }
