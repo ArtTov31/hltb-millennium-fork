@@ -1,13 +1,21 @@
 --[[
     Steam API Helpers for Lua
 
-    Standalone module for game metadata queries.
-    Modified to use SteamHunters API to bypass Steam Store region locks.
+    Standalone module for Steam store API queries.
     Requires: http, json modules
 
     Usage:
         local steam = require("steam")
         local name, err = steam.get_game_name(1234)
+
+    Testing:
+        Functions are separated for testability:
+        - build_url(app_id) - constructs API URL
+        - parse_response(data, app_id) - parses JSON response
+        - get_game_name(app_id) - full flow with HTTP
+
+        For mocking HTTP in tests:
+        steam._http = mock_http_module
 ]]
 
 local http = require("http")
@@ -15,30 +23,50 @@ local json = require("json")
 
 local M = {}
 
-M.API_URL = "https://steamhunters.com/api/apps/"
-M.TIMEOUT = 15
+M.STORE_API_URL = "https://store.steampowered.com/api/appdetails"
+M.TIMEOUT = 10
 
--- Headers required by SteamHunters to accept the request
--- Mimics a standard browser request to avoid 403 errors
-local HEADERS = {
-    ["Accept"] = "application/json",
-    ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.142.86 Safari/537.36",
-    ["X-Requested-With"] = "Steam"
-}
+-- Exposed for testing; defaults to real http module
+M._http = http
 
--- Get game details from SteamHunters API
--- This source is used instead of the Store API to support region-locked games
+-- Build Steam Store API URL
+-- Exported for testing and potential fallback implementations
+function M.build_url(app_id)
+    return M.STORE_API_URL .. "?appids=" .. app_id .. "&l=english"
+end
+
+-- Parse Steam Store API response
+-- Returns app data table or nil, error
+function M.parse_response(data, app_id)
+    if not data then
+        return nil, "No data"
+    end
+
+    local app_data = data[tostring(app_id)]
+    if not app_data then
+        return nil, "App not found in response"
+    end
+
+    if not app_data.success then
+        return nil, "App not found"
+    end
+
+    if not app_data.data then
+        return nil, "No app data"
+    end
+
+    return app_data.data, nil
+end
+
+-- Get game details from Steam API
+-- Always request English to ensure consistent names for HLTB matching
 function M.get_app_details(app_id)
     if not app_id then
         return nil, "app_id is nil"
     end
-    
-    local url = M.API_URL .. app_id
 
-    local response, err = http.get(url, { 
-        timeout = M.TIMEOUT,
-        headers = HEADERS
-    })
+    local url = M.build_url(app_id)
+    local response, err = M._http.get(url, { timeout = M.TIMEOUT })
 
     if not response then
         return nil, "Request failed: " .. (err or "unknown")
@@ -53,9 +81,7 @@ function M.get_app_details(app_id)
         return nil, "Invalid JSON response"
     end
 
-    -- SteamHunters returns the game object directly (e.g., { "id": ..., "name": ... })
-    -- No need to unwrap "app_data.success" like in the official Store API
-    return data, nil
+    return M.parse_response(data, app_id)
 end
 
 -- Get just the game name
@@ -64,11 +90,6 @@ function M.get_game_name(app_id)
     if not details then
         return nil, err
     end
-    
-    if not details.name then
-        return nil, "Name field missing in response"
-    end
-
     return details.name, nil
 end
 
